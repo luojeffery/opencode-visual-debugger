@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "visual-debugger-mcp"
+version = "0.1.0"
+description = "MCP server for visual debugging of graphics/OpenGL applications"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "Pillow>=10.0.0",
+    "click>=8.0.0",
+    "google-genai>=1.0.0",
+]
+
+[project.scripts]
+visual-debugger = "visual_debugger.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/visual_debugger"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
