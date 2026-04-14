@@ -2,20 +2,21 @@
 
 **See your running graphics apps through AI eyes.**
 
-An MCP (Model Context Protocol) server that lets AI coding agents visually debug graphics applications — OpenGL, GLFW, SDL, or any windowed program. It captures screenshots and video clips of running windows and optionally analyzes them with a Vision Language Model (Google Gemini).
+An MCP (Model Context Protocol) server that lets AI coding agents visually debug graphics applications — OpenGL, GLFW, SDL, or any windowed program. It captures screenshots and video clips of running windows and analyzes them with a Vision Language Model.
 
-**Works on Linux and Windows.**
+**Works on Linux and Windows. Supports local open-source VLMs (Molmo2) and Gemini API.**
 
 > **The problem:** AI coding agents can write graphics code but can't *see* the result. When a physics simulation has objects clipping through walls, or a shader produces wrong colors, the agent has no way to know without you describing the bug manually.
 >
-> **The solution:** This MCP server gives your AI agent eyes. It watches your app's window, captures what's on screen, and can even analyze the visuals automatically.
+> **The solution:** This MCP server gives your AI agent eyes. It watches your app's window, captures what's on screen, and analyzes the visuals with a VLM — either a free, open-source model running on your GPU, or a cloud API.
 
 ## ✨ Features
 
 - **🪟 Window Tracking** — Find and track windows by PID or title
 - **📸 Screenshot Capture** — Instant window screenshots
 - **🎬 Video Recording** — Record clips with configurable duration/framerate
-- **🧠 VLM Analysis** — Optional Gemini-powered visual analysis of captures
+- **🧠 VLM Analysis** — Analyze captures with a local model or Gemini API
+- **🆓 Local VLM** — Run [Molmo2-4B](https://huggingface.co/allenai/Molmo2-4B) on your own GPU — free, private, no API key needed
 - **🔌 MCP Protocol** — Works with any MCP-compatible agent (OpenCode, Claude Code, Cline, Cursor, VS Code Copilot)
 - **🚫 Non-invasive** — No render loop modification needed. Purely external observation.
 - **🖥️ Cross-platform** — Linux (X11) and Windows support
@@ -32,19 +33,25 @@ sudo apt install xdotool imagemagick ffmpeg
 - **ffmpeg** — Download from [ffmpeg.org](https://ffmpeg.org/download.html), extract, and add the `bin/` folder to your PATH. Or install via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/): `winget install ffmpeg`
 - That's it! Window capture uses native Windows APIs (no extra tools needed)
 
+### For local VLM (recommended)
+- **NVIDIA GPU** with 4GB+ VRAM (RTX 3060 or better recommended)
+- **CUDA** — Install from [nvidia.com/cuda](https://developer.nvidia.com/cuda-downloads)
+
 ## 🚀 Installation
 
 ### Quick install (from GitHub)
 
 **Linux / macOS:**
 ```bash
-pip install git+https://github.com/luojeffery/opencode-visual-debugger.git
+pip install "visual-debugger-mcp[local] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
 ```
 
 **Windows:**
 ```bash
-pip install "visual-debugger-mcp[windows] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
+pip install "visual-debugger-mcp[local,windows] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
 ```
+
+> **Note:** The `[local]` extra installs PyTorch + transformers for running Molmo2 on your GPU. If you prefer the Gemini API instead, replace `[local]` with `[gemini]`.
 
 ### From source
 
@@ -54,8 +61,42 @@ cd opencode-visual-debugger
 python3 -m venv .venv
 source .venv/bin/activate   # Linux/macOS
 # .venv\Scripts\activate    # Windows
-pip install -e ".[dev]"
+pip install -e ".[local,dev]"
 ```
+
+## 🧠 VLM Setup
+
+The server supports two VLM backends. **Local is recommended** — it's free and private.
+
+### Option A: Local model (recommended)
+
+Set `VLM_MODEL_ID` to a HuggingFace model. The model downloads automatically on first use (~8GB for Molmo2-4B).
+
+```bash
+export VLM_MODEL_ID=allenai/Molmo2-4B
+```
+
+Or pass it via the MCP config (see below). No API keys needed.
+
+**Supported models:**
+| Model | VRAM | Quality |
+|-------|------|---------|
+| [allenai/Molmo2-4B](https://huggingface.co/allenai/Molmo2-4B) | ~4 GB | Good — fast, lightweight |
+| [allenai/Molmo2-8B](https://huggingface.co/allenai/Molmo2-8B) | ~8 GB | Better — more detailed analysis |
+
+Any HuggingFace vision model compatible with `AutoModelForImageTextToText` should work.
+
+### Option B: Gemini API
+
+```bash
+export GEMINI_API_KEY=your-key-here
+```
+
+Get a key at [aistudio.google.com](https://aistudio.google.com/apikey). Free tier available.
+
+### Priority
+
+If both `VLM_MODEL_ID` and `GEMINI_API_KEY` are set, the local model takes priority. You can override this with the `--vlm-backend` CLI flag.
 
 ## ⚙️ MCP Configuration
 
@@ -72,7 +113,7 @@ Add the server to your AI coding agent's MCP config:
       "args": ["serve"],
       "env": {
         "DISPLAY": ":0",
-        "GEMINI_API_KEY": "your-key-here"
+        "VLM_MODEL_ID": "allenai/Molmo2-4B"
       }
     }
   }
@@ -88,7 +129,7 @@ mcpServers:
     args: ["serve"]
     env:
       DISPLAY: ":0"
-      GEMINI_API_KEY: "your-key-here"
+      VLM_MODEL_ID: "allenai/Molmo2-4B"
 ```
 
 ### Claude Code (`~/.claude.json`)
@@ -101,7 +142,7 @@ mcpServers:
       "args": ["serve"],
       "env": {
         "DISPLAY": ":0",
-        "GEMINI_API_KEY": "your-key-here"
+        "VLM_MODEL_ID": "allenai/Molmo2-4B"
       }
     }
   }
@@ -117,7 +158,7 @@ mcpServers:
       "command": "visual-debugger",
       "args": ["serve"],
       "env": {
-        "GEMINI_API_KEY": "your-key-here"
+        "VLM_MODEL_ID": "allenai/Molmo2-4B"
       }
     }
   }
@@ -126,7 +167,7 @@ mcpServers:
 
 > **Note:** On Linux, include `"DISPLAY": ":0"` in env. On Windows, omit it — not needed.
 
-> **Note:** `GEMINI_API_KEY` is optional. Without it, capture still works but VLM analysis is disabled.
+> **Tip:** The first time the server analyzes an image, it will download the model weights (~8GB). Subsequent runs use the cached model from `~/.cache/huggingface/`.
 
 ## 🛠️ MCP Tools
 
@@ -190,16 +231,21 @@ Agent: I'll compile and run the simulation, then check if it looks right.
 ## 🏗️ Architecture
 
 ```
-server.py / analyzer.py       ← platform-agnostic
-        ↓
-window.py   → LinuxWindowManager     (xdotool)
-            → WindowsWindowManager   (ctypes + user32.dll)
+server.py                         ← MCP tools (platform-agnostic)
+analyzer.py                       ← VLM dispatch
+  → LocalAnalyzer                   (transformers + Molmo2/any HF model)
+  → GeminiAnalyzer                  (Google Gemini API)
 
-capture.py  → LinuxCaptureEngine     (ImageMagick + ffmpeg x11grab)
-            → WindowsCaptureEngine   (mss + ffmpeg gdigrab)
+window.py                         ← Window management
+  → LinuxWindowManager              (xdotool)
+  → WindowsWindowManager            (ctypes + user32.dll)
+
+capture.py                        ← Screenshot & video
+  → LinuxCaptureEngine              (ImageMagick + ffmpeg x11grab)
+  → WindowsCaptureEngine            (mss + ffmpeg gdigrab)
 ```
 
-The platform is auto-detected at startup. Linux uses X11 tools, Windows uses native Win32 APIs.
+Platform and VLM backend are auto-detected at startup.
 
 ## 🧪 Running Tests
 
@@ -219,7 +265,7 @@ opencode-visual-debugger/
 │   ├── cli.py             # Click CLI (visual-debugger serve)
 │   ├── window.py          # Window detection (Linux + Windows)
 │   ├── capture.py         # Screenshot & video capture (Linux + Windows)
-│   └── analyzer.py        # VLM analysis via Google Gemini
+│   └── analyzer.py        # VLM analysis (local + Gemini)
 ├── tests/
 │   ├── conftest.py
 │   ├── test_window.py

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "visual-debugger-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP server for visual debugging of graphics/OpenGL applications"
 readme = "README.md"
 license = "MIT"
@@ -13,7 +13,6 @@ dependencies = [
     "mcp[cli]>=1.0.0",
     "Pillow>=10.0.0",
     "click>=8.0.0",
-    "google-genai>=1.0.0",
 ]
 
 [project.scripts]
@@ -26,6 +25,18 @@ packages = ["src/visual_debugger"]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+]
+local = [
+    "torch>=2.0.0",
+    "transformers>=4.57.0",
+    "accelerate>=0.20.0",
+    "einops",
+    "torchvision",
+    "decord2",
+    "molmo_utils",
+]
+gemini = [
+    "google-genai>=1.0.0",
 ]
 windows = [
     "mss>=9.0.0",

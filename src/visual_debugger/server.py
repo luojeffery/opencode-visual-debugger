@@ -3,7 +3,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from visual_debugger.window import create_window_manager
 from visual_debugger.capture import create_capture_engine
-from visual_debugger.analyzer import VisionAnalyzer
+from visual_debugger.analyzer import create_analyzer
 import json
 
 mcp = FastMCP(
@@ -16,7 +16,7 @@ mcp = FastMCP(
 # Global state — auto-detects platform (Linux/Windows)
 _wm = create_window_manager()
 _capture = create_capture_engine()
-_analyzer = VisionAnalyzer()
+_analyzer = create_analyzer()
 
 
 @mcp.tool()
@@ -95,7 +95,7 @@ def capture_screenshot(prompt: str | None = None) -> str:
     """Capture a screenshot of the currently tracked window.
     
     Must call watch_window first to select a window. Optionally analyzes 
-    the screenshot with a VLM if GEMINI_API_KEY is set.
+    the screenshot with a VLM (local model or Gemini API).
     
     Args:
         prompt: Optional custom prompt for VLM analysis. If not provided,
@@ -125,7 +125,7 @@ def capture_screenshot(prompt: str | None = None) -> str:
             except Exception as e:
                 response["analysis_error"] = str(e)
         elif not _analyzer.available:
-            response["note"] = "Set GEMINI_API_KEY to enable automatic visual analysis"
+            response["note"] = "No VLM configured. Set VLM_MODEL_ID or GEMINI_API_KEY for analysis."
         
         return json.dumps(response)
     except Exception as e:
@@ -178,7 +178,7 @@ def record_clip(
             except Exception as e:
                 response["analysis_error"] = str(e)
         elif not _analyzer.available:
-            response["note"] = "Set GEMINI_API_KEY to enable automatic visual analysis"
+            response["note"] = "No VLM configured. Set VLM_MODEL_ID or GEMINI_API_KEY for analysis."
         
         return json.dumps(response)
     except Exception as e:
@@ -192,7 +192,8 @@ def analyze_visual(
 ) -> str:
     """Capture and analyze the tracked window with a Vision Language Model.
     
-    Combines capture + analysis in one call. Requires GEMINI_API_KEY.
+    Combines capture + analysis in one call. Requires either a local VLM
+    (VLM_MODEL_ID) or Gemini API key (GEMINI_API_KEY).
     
     Args:
         mode: "screenshot" for single frame, "video" for 5-second clip
@@ -205,7 +206,7 @@ def analyze_visual(
         return json.dumps({"error": "No window tracked. Call watch_window first."})
     
     if not _analyzer.available:
-        return json.dumps({"error": "GEMINI_API_KEY not set. Cannot perform analysis."})
+        return json.dumps({"error": "No VLM configured. Set VLM_MODEL_ID for local model or GEMINI_API_KEY for Gemini."})
     
     try:
         if mode == "screenshot":
