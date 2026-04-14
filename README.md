@@ -36,11 +36,12 @@ sudo apt install xdotool imagemagick ffmpeg
 
 ### Quick install (from GitHub)
 
+**Linux / macOS:**
 ```bash
 pip install git+https://github.com/luojeffery/opencode-visual-debugger.git
 ```
 
-On Windows, also install the Windows extras:
+**Windows:**
 ```bash
 pip install "visual-debugger-mcp[windows] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
 ```
