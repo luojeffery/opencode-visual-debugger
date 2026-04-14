@@ -28,8 +28,8 @@ sudo apt install xdotool imagemagick ffmpeg
 ```
 
 ### Windows
-- **ffmpeg** — Install via [chocolatey](https://chocolatey.org/): `choco install ffmpeg`, or download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH
 - **Python 3.10+**
+- **ffmpeg** — Download from [ffmpeg.org](https://ffmpeg.org/download.html), extract, and add the `bin/` folder to your PATH. Or install via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/): `winget install ffmpeg`
 - That's it! Window capture uses native Windows APIs (no extra tools needed)
 
 ## 🚀 Installation
