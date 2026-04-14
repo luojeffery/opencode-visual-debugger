@@ -229,16 +229,6 @@ opencode-visual-debugger/
     └── implementation-plan.md
 ```
 
-## 🗺️ Roadmap
-
-- [ ] macOS support (screencapture + CoreGraphics)
-- [ ] Wayland support (wlr-screencopy / PipeWire)
-- [ ] Diff-based change detection (only analyze when visuals change)
-- [ ] Background monitoring mode
-- [ ] Multi-window tracking
-- [ ] Support for additional VLM providers (OpenAI, Anthropic)
-- [ ] Publish to PyPI for `uvx` one-liner install
-
 ## 📄 License
 
 MIT
