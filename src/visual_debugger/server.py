@@ -1,19 +1,21 @@
 """MCP Server for visual debugging of graphics applications."""
+import sys
 from mcp.server.fastmcp import FastMCP
-from visual_debugger.window import WindowManager
-from visual_debugger.capture import CaptureEngine
+from visual_debugger.window import create_window_manager
+from visual_debugger.capture import create_capture_engine
 from visual_debugger.analyzer import VisionAnalyzer
 import json
 
 mcp = FastMCP(
     "visual-debugger",
     instructions="Visual debugging MCP server for graphics/OpenGL applications. "
-                 "Captures screenshots and video of running windows for AI analysis."
+                 "Captures screenshots and video of running windows for AI analysis. "
+                 f"Platform: {sys.platform}"
 )
 
-# Global state
-_wm = WindowManager()
-_capture = CaptureEngine()
+# Global state — auto-detects platform (Linux/Windows)
+_wm = create_window_manager()
+_capture = create_capture_engine()
 _analyzer = VisionAnalyzer()
 
 
@@ -23,7 +25,7 @@ def watch_window(
     pid: int | None = None,
     timeout: int = 10
 ) -> str:
-    """Find and start tracking an X11 window by title or PID.
+    """Find and start tracking a window by title or PID.
     
     Use this first to select which window to debug. The agent typically knows
     the PID because it launched the process, or the title from the GLFW/SDL 
@@ -64,7 +66,7 @@ def watch_window(
 
 @mcp.tool()
 def list_windows() -> str:
-    """List all visible X11 windows. Useful to discover available windows
+    """List all visible windows. Useful to discover available windows
     before using watch_window.
     
     Returns:

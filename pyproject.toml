@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "visual-debugger-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for visual debugging of graphics/OpenGL applications"
 readme = "README.md"
 license = "MIT"
@@ -26,4 +26,7 @@ packages = ["src/visual_debugger"]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+]
+windows = [
+    "mss>=9.0.0",
 ]
