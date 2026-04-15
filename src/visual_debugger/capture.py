@@ -119,6 +119,9 @@ class LinuxCaptureEngine(BaseCaptureEngine):
         output_path = self.output_dir / filename
 
         x, y, w, h = self.get_window_geometry(window_id)
+        # libx264 requires even dimensions — round down to nearest even number
+        w = w & ~1
+        h = h & ~1
 
         cmd = [
             "ffmpeg", "-y",
@@ -239,6 +242,7 @@ class WindowsCaptureEngine(BaseCaptureEngine):
             "-framerate", str(framerate),
             "-i", f"title={window_title}",
             "-t", str(duration),
+            "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
             "-c:v", "libx264",
             "-crf", "23",
             "-preset", "fast",
