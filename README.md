@@ -242,7 +242,7 @@ window.py                         ← Window management
 
 capture.py                        ← Screenshot & video
   → LinuxCaptureEngine              (ImageMagick + ffmpeg x11grab)
-  → WindowsCaptureEngine            (mss + ffmpeg gdigrab)
+  → WindowsCaptureEngine            (PrintWindow + ffmpeg gdigrab)
 ```
 
 Platform and VLM backend are auto-detected at startup.

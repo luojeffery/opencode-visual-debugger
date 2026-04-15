@@ -39,5 +39,5 @@ gemini = [
     "google-genai>=1.0.0",
 ]
 windows = [
-    "mss>=9.0.0",
+    # No extra deps — screenshots use ctypes/PrintWindow, video uses ffmpeg
 ]

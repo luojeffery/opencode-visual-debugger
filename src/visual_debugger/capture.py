@@ -1,7 +1,7 @@
 """Screenshot and video capture — cross-platform.
 
 Linux: ImageMagick import + ffmpeg x11grab
-Windows: mss (or Pillow ImageGrab) + ffmpeg gdigrab
+Windows: PrintWindow (ctypes/user32) + ffmpeg gdigrab
 """
 import subprocess
 import os
@@ -149,7 +149,7 @@ class LinuxCaptureEngine(BaseCaptureEngine):
 
 
 class WindowsCaptureEngine(BaseCaptureEngine):
-    """Capture engine using mss + ffmpeg gdigrab (Windows)."""
+    """Capture engine using PrintWindow + ffmpeg gdigrab (Windows)."""
 
     def __init__(self, output_dir: str | None = None):
         super().__init__(output_dir)
