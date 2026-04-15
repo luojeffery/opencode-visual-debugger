@@ -74,6 +74,7 @@ class GeminiAnalyzer(BaseAnalyzer):
         return self._client
 
     def analyze_image(self, image_path: str, prompt: str | None = None) -> str:
+        import time as _time
         client = self._get_client()
         prompt = prompt or DEFAULT_IMAGE_PROMPT
 
@@ -84,19 +85,31 @@ class GeminiAnalyzer(BaseAnalyzer):
         with open(image_path, "rb") as f:
             image_data = f.read()
 
-        response = client.models.generate_content(
-            model=self.model,
-            contents=[{
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {
-                        "mime_type": f"image/{image_path.suffix.lstrip('.')}",
-                        "data": base64.b64encode(image_data).decode()
-                    }}
-                ]
-            }]
-        )
-        return response.text
+        # Retry on transient 503/429 errors
+        last_error = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[{
+                        "parts": [
+                            {"text": prompt},
+                            {"inline_data": {
+                                "mime_type": f"image/{image_path.suffix.lstrip('.')}",
+                                "data": base64.b64encode(image_data).decode()
+                            }}
+                        ]
+                    }]
+                )
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str:
+                    last_error = e
+                    _time.sleep(3 * (attempt + 1))
+                else:
+                    raise
+        raise last_error
 
     def analyze_video(self, video_path: str, prompt: str | None = None) -> str:
         import time as _time
@@ -122,16 +135,28 @@ class GeminiAnalyzer(BaseAnalyzer):
             waited += poll_interval
             uploaded = client.files.get(name=uploaded.name)
 
-        response = client.models.generate_content(
-            model=self.model,
-            contents=[{
-                "parts": [
-                    {"text": prompt},
-                    {"file_data": {"file_uri": uploaded.uri, "mime_type": uploaded.mime_type}}
-                ]
-            }]
-        )
-        return response.text
+        # Retry on transient 503/429 errors
+        last_error = None
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[{
+                        "parts": [
+                            {"text": prompt},
+                            {"file_data": {"file_uri": uploaded.uri, "mime_type": uploaded.mime_type}}
+                        ]
+                    }]
+                )
+                return response.text
+            except Exception as e:
+                err_str = str(e)
+                if "503" in err_str or "429" in err_str or "UNAVAILABLE" in err_str:
+                    last_error = e
+                    _time.sleep(3 * (attempt + 1))
+                else:
+                    raise
+        raise last_error
 
     def analyze_frames(self, frame_paths: list[str], prompt: str | None = None) -> str:
         client = self._get_client()
@@ -270,7 +295,7 @@ def create_analyzer(**kwargs) -> BaseAnalyzer:
     if os.environ.get("VLM_MODEL_ID"):
         return LocalAnalyzer()
     elif os.environ.get("GEMINI_API_KEY"):
-        return GeminiAnalyzer()
+        return GeminiAnalyzer(model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"))
     else:
         # Default to local — it's free and will download on first use
         return LocalAnalyzer()
