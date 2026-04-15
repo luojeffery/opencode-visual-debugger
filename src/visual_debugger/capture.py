@@ -228,23 +228,32 @@ class WindowsCaptureEngine(BaseCaptureEngine):
 
         gdigrab's title= matching is unreliable for OpenGL/DirectX windows,
         so we reuse the same PrintWindow approach that works for screenshots:
-        capture raw frames in a thread and pipe them to ffmpeg via stdin.
+        capture raw frames in a loop and pipe them to ffmpeg via stdin.
         """
         if not filename:
             filename = f"clip_{int(time.time() * 1000)}.mp4"
         output_path = self.output_dir / filename
 
         import ctypes
-        import threading
 
         hwnd = int(window_id)
         PW_RENDERFULLCONTENT = 2
 
-        # Get window dimensions via GetWindowRect
-        rect = (ctypes.c_long * 4)()
-        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
-        w = rect[2] - rect[0]
-        h = rect[3] - rect[1]
+        # Get window dimensions — use GetClientRect for just the render area
+        # (excludes title bar and borders, matches what PrintWindow captures
+        # with PW_RENDERFULLCONTENT on modern Windows with DWM)
+        client_rect = (ctypes.c_long * 4)()
+        ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(client_rect))
+        w = client_rect[2]
+        h = client_rect[3]
+
+        # Fallback to GetWindowRect if GetClientRect returns zero
+        if w <= 0 or h <= 0:
+            rect = (ctypes.c_long * 4)()
+            ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect))
+            w = rect[2] - rect[0]
+            h = rect[3] - rect[1]
+
         if w <= 0 or h <= 0:
             raise RuntimeError(f"Invalid window dimensions: {w}x{h}")
 
@@ -252,6 +261,52 @@ class WindowsCaptureEngine(BaseCaptureEngine):
         enc_w = w & ~1
         enc_h = h & ~1
 
+        # Capture all frames first, then encode — avoids stdin race conditions
+        frame_size = w * h * 4
+        frames = []
+
+        frame_interval = 1.0 / framerate
+        total_frames = int(duration * framerate)
+
+        for i in range(total_frames):
+            frame_start = time.monotonic()
+
+            hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
+            mfc_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
+            bitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+            ctypes.windll.gdi32.SelectObject(mfc_dc, bitmap)
+            ctypes.windll.user32.PrintWindow(hwnd, mfc_dc, PW_RENDERFULLCONTENT)
+
+            bmi = ctypes.create_string_buffer(40)
+            ctypes.memmove(bmi, (40).to_bytes(4, 'little'), 4)
+            ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 4)),
+                           w.to_bytes(4, 'little', signed=True), 4)
+            ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 8)),
+                           (-h).to_bytes(4, 'little', signed=True), 4)
+            ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 12)),
+                           (1).to_bytes(2, 'little'), 2)
+            ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 14)),
+                           (32).to_bytes(2, 'little'), 2)
+
+            buf = ctypes.create_string_buffer(frame_size)
+            ctypes.windll.gdi32.GetDIBits(mfc_dc, bitmap, 0, h, buf, bmi, 0)
+
+            ctypes.windll.gdi32.DeleteObject(bitmap)
+            ctypes.windll.gdi32.DeleteDC(mfc_dc)
+            ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+
+            frames.append(buf.raw)
+
+            # Sleep to maintain real-time capture
+            elapsed = time.monotonic() - frame_start
+            sleep_time = frame_interval - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        if not frames:
+            raise RuntimeError("No frames captured")
+
+        # Now pipe all frames to ffmpeg for encoding
         cmd = [
             "ffmpeg", "-y",
             "-f", "rawvideo",
@@ -267,79 +322,16 @@ class WindowsCaptureEngine(BaseCaptureEngine):
             str(output_path)
         ]
 
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        raw_data = b"".join(frames)
+        del frames  # free memory
+
+        result = subprocess.run(
+            cmd, input=raw_data,
+            capture_output=True, timeout=duration + 120
         )
 
-        frame_interval = 1.0 / framerate
-        total_frames = int(duration * framerate)
-        capture_error = [None]
-
-        def capture_frames():
-            try:
-                for i in range(total_frames):
-                    frame_start = time.monotonic()
-
-                    # PrintWindow capture (same as screenshot)
-                    hwnd_dc = ctypes.windll.user32.GetDC(hwnd)
-                    mfc_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
-                    bitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
-                    ctypes.windll.gdi32.SelectObject(mfc_dc, bitmap)
-                    ctypes.windll.user32.PrintWindow(hwnd, mfc_dc, PW_RENDERFULLCONTENT)
-
-                    bmi = ctypes.create_string_buffer(40)
-                    ctypes.memmove(bmi, (40).to_bytes(4, 'little'), 4)
-                    ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 4)),
-                                   w.to_bytes(4, 'little', signed=True), 4)
-                    ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 8)),
-                                   (-h).to_bytes(4, 'little', signed=True), 4)
-                    ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 12)),
-                                   (1).to_bytes(2, 'little'), 2)
-                    ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 14)),
-                                   (32).to_bytes(2, 'little'), 2)
-
-                    buf = ctypes.create_string_buffer(w * h * 4)
-                    ctypes.windll.gdi32.GetDIBits(mfc_dc, bitmap, 0, h, buf, bmi, 0)
-
-                    ctypes.windll.gdi32.DeleteObject(bitmap)
-                    ctypes.windll.gdi32.DeleteDC(mfc_dc)
-                    ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
-
-                    try:
-                        proc.stdin.write(buf.raw)
-                    except (BrokenPipeError, OSError):
-                        break
-
-                    # Sleep to maintain framerate
-                    elapsed = time.monotonic() - frame_start
-                    sleep_time = frame_interval - elapsed
-                    if sleep_time > 0:
-                        time.sleep(sleep_time)
-            except Exception as e:
-                capture_error[0] = e
-            finally:
-                try:
-                    proc.stdin.close()
-                except OSError:
-                    pass
-
-        capture_thread = threading.Thread(target=capture_frames, daemon=True)
-        capture_thread.start()
-
-        # Wait for ffmpeg to finish (generous timeout for encoding)
-        try:
-            stdout, stderr = proc.communicate(timeout=duration + 60)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            raise RuntimeError(f"ffmpeg encoding timed out after {duration + 60}s")
-
-        capture_thread.join(timeout=5)
-
-        if capture_error[0]:
-            raise RuntimeError(f"Frame capture failed: {capture_error[0]}")
-        if proc.returncode != 0:
-            raise RuntimeError(f"Recording failed: {stderr.decode(errors='replace')}")
+        if result.returncode != 0:
+            raise RuntimeError(f"Recording failed: {result.stderr.decode(errors='replace')}")
         if not output_path.exists():
             raise RuntimeError(f"Recording file not created at {output_path}")
 
