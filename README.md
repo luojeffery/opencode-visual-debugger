@@ -41,17 +41,13 @@ sudo apt install xdotool imagemagick ffmpeg
 
 ### Quick install (from GitHub)
 
-**Linux / macOS:**
 ```bash
 pip install "visual-debugger-mcp[local] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
 ```
 
-**Windows:**
-```bash
-pip install "visual-debugger-mcp[local,windows] @ git+https://github.com/luojeffery/opencode-visual-debugger.git"
-```
-
 > **Note:** The `[local]` extra installs PyTorch + transformers for running Molmo2 on your GPU. If you prefer the Gemini API instead, replace `[local]` with `[gemini]`.
+>
+> Works on both Linux and Windows — no platform-specific extras needed.
 
 ### From source
 

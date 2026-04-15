@@ -38,6 +38,4 @@ local = [
 gemini = [
     "google-genai>=1.0.0",
 ]
-windows = [
-    # No extra deps — screenshots use ctypes/PrintWindow, video uses ffmpeg
-]
+
