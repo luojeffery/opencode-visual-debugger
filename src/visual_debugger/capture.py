@@ -166,19 +166,50 @@ class WindowsCaptureEngine(BaseCaptureEngine):
         return (x, y, w, h)
 
     def screenshot(self, window_id: str, filename: str | None = None) -> CaptureResult:
-        import mss
+        import ctypes
+        from ctypes import wintypes
         from PIL import Image
 
         if not filename:
             filename = f"screenshot_{int(time.time() * 1000)}.png"
         output_path = self.output_dir / filename
 
+        hwnd = int(window_id)
         x, y, w, h = self.get_window_geometry(window_id)
-        monitor = {"left": x, "top": y, "width": w, "height": h}
 
-        with mss.mss() as sct:
-            img = sct.grab(monitor)
-            Image.frombytes("RGB", img.size, img.bgra, "raw", "BGRX").save(str(output_path))
+        # Use PrintWindow to capture the window even if it's behind other windows
+        # or not focused — mss.grab() only captures screen pixels at a region
+        hwnd_dc = ctypes.windll.user32.GetWindowDC(hwnd)
+        mfc_dc = ctypes.windll.gdi32.CreateCompatibleDC(hwnd_dc)
+        bitmap = ctypes.windll.gdi32.CreateCompatibleBitmap(hwnd_dc, w, h)
+        ctypes.windll.gdi32.SelectObject(mfc_dc, bitmap)
+
+        # PW_RENDERFULLCONTENT = 2 — captures DirectX/OpenGL content too
+        ctypes.windll.user32.PrintWindow(hwnd, mfc_dc, 2)
+
+        # Extract bitmap data
+        bmi = ctypes.create_string_buffer(40)  # BITMAPINFOHEADER
+        ctypes.memmove(bmi, (40).to_bytes(4, 'little'), 4)  # biSize
+        ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 4)),
+                       w.to_bytes(4, 'little', signed=True), 4)  # biWidth
+        ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 8)),
+                       (-h).to_bytes(4, 'little', signed=True), 4)  # biHeight (negative = top-down)
+        ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 12)),
+                       (1).to_bytes(2, 'little'), 2)  # biPlanes
+        ctypes.memmove(ctypes.addressof(ctypes.c_char.from_buffer(bmi, 14)),
+                       (32).to_bytes(2, 'little'), 2)  # biBitCount
+
+        buf = ctypes.create_string_buffer(w * h * 4)
+        ctypes.windll.gdi32.GetDIBits(mfc_dc, bitmap, 0, h, buf, bmi, 0)
+
+        # Cleanup GDI objects
+        ctypes.windll.gdi32.DeleteObject(bitmap)
+        ctypes.windll.gdi32.DeleteDC(mfc_dc)
+        ctypes.windll.user32.ReleaseDC(hwnd, hwnd_dc)
+
+        img = Image.frombytes("RGBX", (w, h), buf, "raw", "BGRX")
+        img = img.convert("RGB")
+        img.save(str(output_path))
 
         if not output_path.exists():
             raise RuntimeError(f"Screenshot file not created at {output_path}")
