@@ -33,7 +33,7 @@ sudo apt install xdotool imagemagick ffmpeg
 - **ffmpeg** — Download from [ffmpeg.org](https://ffmpeg.org/download.html), extract, and add the `bin/` folder to your PATH. Or install via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/): `winget install ffmpeg`
 - That's it! Window capture uses native Windows APIs (no extra tools needed)
 
-### For local VLM (recommended)
+### For local VLM (optional)
 - **NVIDIA GPU** with 4GB+ VRAM (RTX 3060 or better recommended)
 - **CUDA** — Install from [nvidia.com/cuda](https://developer.nvidia.com/cuda-downloads)
 
@@ -66,17 +66,41 @@ pip install -e ".[local,dev]"
 
 ## 🧠 VLM Setup
 
-The server supports two VLM backends. **Local is recommended** — it's free and private.
+The server supports two VLM backends. **Gemini API is recommended** — it's cheap, fast, and requires no GPU.
 
-### Option A: Local model (recommended)
+### Option A: Gemini API (recommended)
+
+Get a free API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+
+```bash
+export GEMINI_API_KEY=your-key-here
+```
+
+**Pricing:** The free tier has daily limits. With billing enabled, costs are negligible:
+
+| Model | Input | Output | Best for |
+|-------|-------|--------|----------|
+| `gemini-2.0-flash` | $0.10/M | $0.40/M | Fast, reliable (default) |
+| `gemini-2.5-flash` | $0.15/M | $0.60/M | Smarter reasoning |
+| `gemini-2.5-flash-lite` | $0.05/M | $0.30/M | Cheapest option |
+
+A typical screenshot analysis costs **< $0.001**. A video clip analysis costs **< $0.01**.
+
+To change the model, set `GEMINI_MODEL`:
+
+```bash
+export GEMINI_MODEL=gemini-2.0-flash   # default
+```
+
+### Option B: Local model (free, private, requires GPU)
+
+Run an open-source VLM on your own GPU — no API keys, no cost, fully private.
 
 Set `VLM_MODEL_ID` to a HuggingFace model. The model downloads automatically on first use (~8GB for Molmo2-4B).
 
 ```bash
 export VLM_MODEL_ID=allenai/Molmo2-4B
 ```
-
-Or pass it via the MCP config (see below). No API keys needed.
 
 **Supported models:**
 | Model | VRAM | Quality |
@@ -86,17 +110,9 @@ Or pass it via the MCP config (see below). No API keys needed.
 
 Any HuggingFace vision model compatible with `AutoModelForImageTextToText` should work.
 
-### Option B: Gemini API
-
-```bash
-export GEMINI_API_KEY=your-key-here
-```
-
-Get a key at [aistudio.google.com](https://aistudio.google.com/apikey). Free tier available.
-
 ### Priority
 
-If both `VLM_MODEL_ID` and `GEMINI_API_KEY` are set, the local model takes priority. You can override this with the `--vlm-backend` CLI flag.
+If both `VLM_MODEL_ID` and `GEMINI_API_KEY` are set, the local model takes priority.
 
 ## ⚙️ MCP Configuration
 
@@ -113,7 +129,7 @@ Add the server to your AI coding agent's MCP config:
       "args": ["serve"],
       "env": {
         "DISPLAY": ":0",
-        "VLM_MODEL_ID": "allenai/Molmo2-4B"
+        "GEMINI_API_KEY": "your-key-here"
       }
     }
   }
@@ -129,7 +145,7 @@ mcpServers:
     args: ["serve"]
     env:
       DISPLAY: ":0"
-      VLM_MODEL_ID: "allenai/Molmo2-4B"
+      GEMINI_API_KEY: "your-key-here"
 ```
 
 ### Claude Code (`~/.claude.json`)
@@ -142,7 +158,7 @@ mcpServers:
       "args": ["serve"],
       "env": {
         "DISPLAY": ":0",
-        "VLM_MODEL_ID": "allenai/Molmo2-4B"
+        "GEMINI_API_KEY": "your-key-here"
       }
     }
   }
@@ -158,7 +174,7 @@ mcpServers:
       "command": "visual-debugger",
       "args": ["serve"],
       "env": {
-        "VLM_MODEL_ID": "allenai/Molmo2-4B"
+        "GEMINI_API_KEY": "your-key-here"
       }
     }
   }
@@ -167,7 +183,7 @@ mcpServers:
 
 > **Note:** On Linux, include `"DISPLAY": ":0"` in env. On Windows, omit it — not needed.
 
-> **Tip:** The first time the server analyzes an image, it will download the model weights (~8GB). Subsequent runs use the cached model from `~/.cache/huggingface/`.
+> **Tip:** For local VLM, replace `GEMINI_API_KEY` with `"VLM_MODEL_ID": "allenai/Molmo2-4B"`. The first run downloads model weights (~8GB), then caches them in `~/.cache/huggingface/`.
 
 ## 🛠️ MCP Tools
 
@@ -242,7 +258,7 @@ window.py                         ← Window management
 
 capture.py                        ← Screenshot & video
   → LinuxCaptureEngine              (ImageMagick + ffmpeg x11grab)
-  → WindowsCaptureEngine            (PrintWindow + ffmpeg gdigrab)
+  → WindowsCaptureEngine            (PrintWindow + ffmpeg rawvideo pipe)
 ```
 
 Platform and VLM backend are auto-detected at startup.
