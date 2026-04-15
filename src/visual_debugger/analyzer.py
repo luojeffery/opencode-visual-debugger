@@ -99,6 +99,7 @@ class GeminiAnalyzer(BaseAnalyzer):
         return response.text
 
     def analyze_video(self, video_path: str, prompt: str | None = None) -> str:
+        import time as _time
         client = self._get_client()
         prompt = prompt or DEFAULT_VIDEO_PROMPT
 
@@ -107,6 +108,20 @@ class GeminiAnalyzer(BaseAnalyzer):
             raise FileNotFoundError(f"Video not found: {video_path}")
 
         uploaded = client.files.upload(file=video_path)
+
+        # Gemini Files API requires processing time — poll until ACTIVE
+        max_wait = 120  # seconds
+        poll_interval = 2
+        waited = 0
+        while uploaded.state.name != "ACTIVE":
+            if uploaded.state.name == "FAILED":
+                raise RuntimeError(f"Gemini file processing failed: {uploaded.state}")
+            if waited >= max_wait:
+                raise RuntimeError(f"Gemini file not ready after {max_wait}s (state: {uploaded.state.name})")
+            _time.sleep(poll_interval)
+            waited += poll_interval
+            uploaded = client.files.get(name=uploaded.name)
+
         response = client.models.generate_content(
             model=self.model,
             contents=[{
